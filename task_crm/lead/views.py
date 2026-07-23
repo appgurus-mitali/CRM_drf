@@ -1,0 +1,117 @@
+from .models import Lead,LeadStatus,LeadSource,Priority
+from .serializers import LeadSerializer
+from authentication.models import MyUser
+
+from rest_framework.decorators import api_view,permission_classes
+from rest_framework.permissions import IsAdminUser,IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
+
+from rest_framework_simplejwt.tokens import RefreshToken
+import traceback
+
+# Create your views here.
+@api_view(['GET','PUT','PATCH','DELETE'])
+@permission_classes([IsAuthenticated])
+def lead_view(request,pk=None):
+    if request.method=='GET':
+        try:
+            if pk is not None:
+                user = Lead.objects.get(id=pk)
+                serializer = LeadSerializer(user)
+            else : 
+                users = Lead.objects.all()
+                serializer = LeadSerializer(users,many=True)
+            return Response({'status':1,'message':f'Welcome {request.user.username}','data':serializer.data},status=status.HTTP_200_OK)
+        except (Lead.DoesNotExist,Lead.MultipleObjectsReturned):
+                    return Response({'status':0,'message':f'User not exists.','data':{}},status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            print("\n\nException in reg")
+            traceback.print_exc()
+        return Response({'status':0,'message':'An Internal Server Error Occurred. Pls check terminal.'},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    try:
+        lead = Lead.objects.get(pk=pk)
+
+        if request.method in ['PUT', 'PATCH']:
+                partial = (request.method == 'PATCH')
+                serializer = LeadSerializer(lead, data=request.data, partial=partial)
+                if serializer.is_valid():
+                    serializer.save()
+                    return Response({'status':1,'message':f'Lead Updated Successfully','data':serializer.data},status=status.HTTP_200_OK)
+                errors={key:err[0] for key,err in serializer.errors.items()}
+                return Response({'status':0,'message':'Validation failed.','error':errors},status=status.HTTP_400_BAD_REQUEST)
+        
+        elif request.method == 'DELETE':
+            lead.delete()
+            return Response({"success": 0,"message": "Lead deleted successfully.","data": {}}, status=status.HTTP_204_NO_CONTENT)
+    except Lead.DoesNotExist:
+        return Response({"success": 0,"message": f"Lead with ID {pk} does not exist.","data": {}},status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+            print("\n\nException in reg")
+            traceback.print_exc()
+            return Response({'status':0,'message':'An Internal Server Error Occurred. Pls check terminal.'},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+def create_leadview(request):
+    try:
+        serializer = LeadSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({'status':1,'message':f'Lead Created Successfully','data':serializer.data},status=status.HTTP_201_CREATED)
+        errors={key:err[0] for key,err in serializer.errors.items()}
+        return Response({'status':0,'message':'Validation failed.','error':errors},status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        print("\n\nException in reg")
+        traceback.print_exc()
+        return Response({'status':0,'message':'An Internal Server Error Occurred. Pls check terminal.'},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['PATCH'])
+@permission_classes([IsAdminUser])
+def lead_assign_view(request,pk):
+    try:
+        lead = Lead.objects.get(id=pk)
+        user_id = request.data.get('assigned_lead') or request.data.get('user_id')
+
+        if user_id is None or user_id=='':
+            return Response({"success": 0,"message": "Invalid data.",'errors':{'user_id':"user_id or assigned_lead is required."}}, status=status.HTTP_400_BAD_REQUEST)
+        if not MyUser.objects.filter(id=user_id).exists():
+            return Response({"success": 0,"message": "User does not exist.",'data':{}}, status=status.HTTP_404_NOT_FOUND)
+
+        lead.assigned_lead_id = user_id
+        lead.save()
+        return Response({"success": 1,"message": f"Lead assigned to user ID {user_id} successfully.",'data':{}}, status=status.HTTP_200_OK)
+    except Lead.DoesNotExist:
+            return Response({"success": 0,"success": 0,"message": f"Lead with ID {pk} does not exist.","data": {}},status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+            print("\n\nException in reg")
+            traceback.print_exc()
+            return Response({"success": 0,'status':0,'message':'An Internal Server Error Occurred. Pls check terminal.','data':{}},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def lead_status_update_view(request,pk):
+    try:
+        lead = Lead.objects.get(id=pk)
+        new_status = request.data.get('status')
+
+        if not new_status :
+            return Response(
+                {"success": 0,"message":'Invalid data.', 'error':{'status':"Status is required."}}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        elif new_status not in LeadStatus.values:
+            return Response(
+                {"success": 0,"message": f"Invalid data.",'error':{'status':f"Invalid status. Allowed choices: {LeadStatus.values}"}}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        lead.status = new_status
+        lead.save()
+        return Response({"success": 1,"message": f"Lead status updated to '{new_status}'.",'data':{}}, status=status.HTTP_200_OK)
+    except Lead.DoesNotExist:
+        return Response({"success": 0,"message": f"Lead with ID {pk} does not exist.","data": {}},status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        print("\n\nException in reg")
+        traceback.print_exc()
+        return Response({'status':0,'message':'An Internal Server Error Occurred. Pls check terminal.',"data": {}},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+

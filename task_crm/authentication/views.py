@@ -85,7 +85,7 @@ def profile(request):
         except Exception as e:
             print("\n\nException in reg")
             traceback.print_exc()
-        return Response({'status':0,'message':'An Internal Server Error Occurred. Pls check terminal.'},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({'status':0,'message':'An Internal Server Error Occurred. Pls check terminal.'},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     elif request.method =='DELETE':
         try:
@@ -98,5 +98,5 @@ def profile(request):
         except Exception as e:
             print("\n\nException in reg")
             traceback.print_exc()
-        return Response({'status':0,'message':'An Internal Server Error Occurred. Pls check terminal.'},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({'status':0,'message':'An Internal Server Error Occurred. Pls check terminal.'},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     

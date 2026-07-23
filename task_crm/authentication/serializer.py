@@ -161,13 +161,11 @@ class MyUserSerializer(serializers.ModelSerializer):
 
         return super().update(instance, validated_data)
     
-"""
 {
     "status": 1,
-    "message": "login successful. Welcome jerry",
+    "message": "login successful. Welcome Jerry",
     "data": {
-        "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzg0NzMwMjQ4LCJpYXQiOjE3ODQ3MTU4NDgsImp0aSI6ImFmNTBmN2I0NmI3MzQ5MDY5MTkwZmYxMDA0NmI1YjczIiwidXNlcl9pZCI6IjMiLCJlbWFpbCI6ImplcnJ5QG1pY2UuY29tIiwidXNlcm5hbWUiOiJqZXJyeSJ9.9oOuKFIXV1-GCW11gu7936i1UrPF0oud-T9RCrwaNX0",
-        "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc4NDc1OTA0OCwiaWF0IjoxNzg0NzE1ODQ4LCJqdGkiOiJkZjMwZWIzZjZjMTY0Y2E2YjkxZmY5ZTA5ZjY0ODgyYiIsInVzZXJfaWQiOiIzIiwiZW1haWwiOiJqZXJyeUBtaWNlLmNvbSIsInVzZXJuYW1lIjoiamVycnkifQ.d2qD38oJZTkD2zyvjcovRoD6zkLPt11Ra0Xqt_B2Aoc"
+        "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzg0ODA5OTQzLCJpYXQiOjE3ODQ3OTU1NDMsImp0aSI6IjgwMDE3MGNiY2RmZTRkMWU4OTEwZGQxNTg4ZTkzNTgyIiwidXNlcl9pZCI6IjMiLCJlbWFpbCI6ImplcnJ5QG1pY2UuY29tIiwidXNlcm5hbWUiOiJKZXJyeSJ9.Wu4-Gniwy4hUACVGEohE8h9jHJLDLIYXO-qf0ykyIE0",
+        "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc4NDgzODc0MywiaWF0IjoxNzg0Nzk1NTQzLCJqdGkiOiJlMjI2ZmZkYTBmNWY0NjY0ODg5OGViYjgzYjZmYjhjNyIsInVzZXJfaWQiOiIzIiwiZW1haWwiOiJqZXJyeUBtaWNlLmNvbSIsInVzZXJuYW1lIjoiSmVycnkifQ.XKjDrTqWptjwpgQ_hullqH2RfwS2ksDqqVn2gv89ozU"
     }
 }
-"""
