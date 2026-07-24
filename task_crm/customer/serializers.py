@@ -1,7 +1,6 @@
 from rest_framework import serializers
 from .models import Company, Contact
 
-
 class CompanySerializer(serializers.ModelSerializer):
     """
     Serializer for Company Model.
@@ -29,7 +28,7 @@ class CompanySerializer(serializers.ModelSerializer):
 
     def validate_name(self, value):
         """Ensure company names are unique (case-insensitive check on updates/creates)."""
-        
+
         instance = getattr(self, 'instance', None)
         query = Company.objects.filter(name__iexact=value)
         if instance:
@@ -40,12 +39,8 @@ class CompanySerializer(serializers.ModelSerializer):
 
 
 class ContactSerializer(serializers.ModelSerializer):
-    """
-    Serializer for Contact Model.
-    Supports receiving 'company' ID on write (POST/PUT/PATCH),
-    while returning nested 'company_detail' on read (GET).
-    """
-    # Embedded representation for GET responses
+    """Serializer for Contact Model.Supports receiving 'company' ID on write (POST/PUT/PATCH),while returning nested 'company_detail' on read (GET)."""
+
     company_detail = CompanySerializer(source='company', read_only=True)
 
     class Meta:

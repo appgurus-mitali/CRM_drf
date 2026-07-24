@@ -3,9 +3,9 @@ from authentication.models import MyUser
 
 # Create your models here.
 class Company(models.Model):
-    name = models.CharField(max_length=200, unique=True)
+    name = models.CharField(max_length=200, unique=True,null=False,blank=False)
     domain = models.URLField(blank=True, null=True)
-    industry = models.CharField(max_length=100, blank=True, null=True)
+    industry = models.CharField(max_length=100, blank=True, null=True)  
 
     website = models.URLField(max_length=250, blank=True, null=True)
     address = models.TextField(blank=True, null=True)
@@ -42,7 +42,7 @@ class Contact(models.Model):
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
     email = models.EmailField(unique=True)
-    phone = models.CharField(max_length=20, blank=True, null=True)
+    phone = models.CharField(max_length=20, blank=True, null=True,unique=True)
     mobile = models.CharField(max_length=20, blank=True, null=True)
 
     source = models.CharField(max_length=100, blank=True, null=True)

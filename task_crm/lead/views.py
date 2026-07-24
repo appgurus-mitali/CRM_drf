@@ -1,6 +1,7 @@
 from .models import Lead,LeadStatus,LeadSource,Priority
 from .serializers import LeadSerializer
 from authentication.models import MyUser
+from customer.models import Company,Contact
 
 from rest_framework.decorators import api_view,permission_classes
 from rest_framework.permissions import IsAdminUser,IsAuthenticated
@@ -9,6 +10,8 @@ from rest_framework import status
 
 from rest_framework_simplejwt.tokens import RefreshToken
 import traceback
+
+from django.db import transaction
 
 # Create your views here.
 @api_view(['GET','PUT','PATCH','DELETE'])
@@ -93,18 +96,18 @@ def lead_assign_view(request,pk):
 def lead_status_update_view(request,pk):
     try:
         lead = Lead.objects.get(id=pk)
+        if lead.assigned_lead!=request.user:
+            return Response({"success": 0,"message":'Unauthorized Update. You cannot update this lead.', 'data':{}},status=status.HTTP_403_FORBIDDEN)
+        
         new_status = request.data.get('status')
 
         if not new_status :
             return Response(
-                {"success": 0,"message":'Invalid data.', 'error':{'status':"Status is required."}}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
+                {"success": 0,"message":'Invalid data.', 'error':{'status':"Status is required."}}, status=status.HTTP_400_BAD_REQUEST)
         elif new_status not in LeadStatus.values:
             return Response(
-                {"success": 0,"message": f"Invalid data.",'error':{'status':f"Invalid status. Allowed choices: {LeadStatus.values}"}}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
+                {"success": 0,"message": f"Invalid data.",'error':{'status':f"Invalid status. Allowed choices: {LeadStatus.values}"}}, status=status.HTTP_400_BAD_REQUEST)
+        
         lead.status = new_status
         lead.save()
         return Response({"success": 1,"message": f"Lead status updated to '{new_status}'.",'data':{}}, status=status.HTTP_200_OK)
@@ -115,3 +118,72 @@ def lead_status_update_view(request,pk):
         traceback.print_exc()
         return Response({'status':0,'message':'An Internal Server Error Occurred. Pls check terminal.',"data": {}},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def lead_convert_view(request,pk):
+    try:
+        lead = Lead.objects.get(id=pk)
+        if lead.assigned_lead!=request.user:
+            return Response({"success": 0,"message":'Unauthorized Update. You cannot update this lead.', 'data':{}},status=status.HTTP_403_FORBIDDEN)
+        
+        with transaction.atomic():
+            lead.is_converted=True
+
+            company_instance = None
+
+            if lead.company_name and lead.company_name.strip():
+                company_name_clean = lead.company_name.lower().strip()
+
+                company_instance, company_created = Company.objects.get_or_create(name__iexact=company_name_clean,
+                                                                                defaults={'name': company_name_clean,'assigned_to': lead.assigned_lead})
+
+                # company_instance = Company.objects.filter(name__iexact=company_name_clean).first()
+                # if not company_instance:
+                #     company_instance = Company.objects.create(
+                #         name=company_name_clean,
+                #         assigned_to=lead.assigned_lead
+                #     )
+
+            contact, created = Contact.objects.get_or_create(
+                email__iexact=lead.email.strip(),
+                phone__iecaxt = lead.phone,
+                defaults={
+                    'first_name': lead.first_name,
+                    'last_name': lead.last_name,
+                    'email':lead.email,
+                    'phone': lead.phone,
+                    'company': company_instance,
+                    'source': lead.source,
+                    'converted_from_lead': lead,
+                    'assigned_to': lead.assigned_lead,
+                }
+            )
+
+            if not created:
+                if company_instance:
+                    contact.company = company_instance
+                contact.converted_from_lead = lead
+                contact.save()
+
+            lead.is_converted = True
+            lead.save()
+
+        return Response(
+            {
+                "success": 1,
+                "message": f"Lead '{lead.first_name} {lead.last_name}' converted successfully!",
+                "data": {
+                    "lead_id": lead.id,
+                    "contact_id": contact.id,
+                    "company_id": company_instance.id if company_instance else None
+                }
+            },
+            status=status.HTTP_200_OK
+        )
+
+    except Lead.DoesNotExist:
+        return Response({"success": 0,"message": f"Lead with ID {pk} does not exist.","data": {}},status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        print("\n\nException in reg")
+        traceback.print_exc()
+        return Response({'status':0,'message':'An Internal Server Error Occurred. Pls check terminal.',"data": {}},status=status.HTTP_500_INTERNAL_SERVER_ERROR)

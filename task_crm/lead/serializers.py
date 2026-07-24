@@ -68,22 +68,22 @@ class LeadSerializer(serializers.ModelSerializer):
         return value
     
     def validate(self, attrs):
-        email = attrs.get('email')
-        phone = attrs.get('phone')
+        # email = attrs.get('email')
+        # phone = attrs.get('phone')
 
-        existing = Lead.objects.filter(Q(email=email) | Q(phone=phone))
+        # existing = Lead.objects.filter(Q(email=email) | Q(phone=phone))
 
-        if self.instance:
-            existing = existing.exclude(pk=self.instance.pk)
+        # if self.instance:
+        #     existing = existing.exclude(pk=self.instance.pk)
 
-        errors = {}
-        for user in existing:
-            if user.email == email:
-                errors['email'] = "This email is already registered."
-            if user.phone == phone:
-                errors['phone'] = "This phone number is already in use."  
-        if errors:
-            raise serializers.ValidationError(errors)
+        # errors = {}
+        # for user in existing:
+        #     if user.email == email:
+        #         errors['email'] = "This email is already registered."
+        #     if user.phone == phone:
+        #         errors['phone'] = "This phone number is already in use."  
+        # if errors:
+        #     raise serializers.ValidationError(errors)
 
         return attrs
 

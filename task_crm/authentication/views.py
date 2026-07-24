@@ -41,7 +41,7 @@ def login(request):
             errors['password']="Password is required."
 
         if len(errors)>0:
-            return Response({'status':1,"message":"Invalid data.","errors":errors}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'status':0,"message":"Invalid data.","errors":errors}, status=status.HTTP_400_BAD_REQUEST)
 
         user = MyUser.objects.get(Q(username = username_email.strip())|Q(email=username_email.strip()))
 
@@ -73,7 +73,8 @@ def profile(request):
     
     elif request.method in ['PUT','PATCH']:
         try:
-            user = MyUser.objects.get(id= request.user.id)
+            # user = MyUser.objects.get(id= request.user.id)
+            user = request.user
             serializer = MyUserSerializer(user,data = request.data,partial=(request.method=='PATCH'))
             if serializer.is_valid():
                 serializer.save()
@@ -89,7 +90,8 @@ def profile(request):
     
     elif request.method =='DELETE':
         try:
-            user = MyUser.objects.get(id = request.user.id)
+            # user = MyUser.objects.get(id = request.user.id)
+            user = request.user
             user.delete()
             return Response({'status':1,'message':"Account deleted Successfully.",'data':{}},status=status.HTTP_200_OK)
         
