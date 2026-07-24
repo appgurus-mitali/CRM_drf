@@ -32,7 +32,7 @@ def login(request):
     try:
         errors = dict()
 
-        username_email = request.data.get("username_email")
+        username_email = request.data.get("username_email",None)
         if username_email is None or username_email=="":
             errors['username_email']="Username or Email is required."
 

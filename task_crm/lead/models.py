@@ -1,16 +1,6 @@
 from django.db import models
 
 # Create your models here.
-from django.db import models
-
-# class LeadStatus(models.TextChoices):
-#     NEW = 'NEW', 'New'
-#     CONTACTED = 'CONTACTED', 'Contacted'
-#     QUALIFIED = 'QUALIFIED', 'Qualified'
-#     PROPOSAL_SENT = 'PROPOSAL_SENT', 'Proposal Sent'
-#     NEGOTIATION = 'NEGOTIATION', 'Negotiation'
-#     CONVERTED = 'CONVERTED', 'Converted'
-#     LOST = 'LOST', 'Lost'
 
 class LeadStatus(models.TextChoices):
     NEW = 'NEW', 'New'
@@ -26,6 +16,7 @@ class DealStage(models.TextChoices):
     NEGOTIATION = 'NEGOTIATION', 'Negotiation'
     CLOSED_WON = 'CLOSED_WON', 'Closed Won'
     CLOSED_LOST = 'CLOSED_LOST', 'Closed Lost'
+    
 
 class LeadSource(models.TextChoices):
     WEBSITE = 'WEBSITE', 'Website'
