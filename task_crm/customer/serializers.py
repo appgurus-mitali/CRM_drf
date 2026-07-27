@@ -13,15 +13,109 @@ class CompanySerializer(serializers.ModelSerializer):
         fields = ['id','name','domain','industry','website','address','city','state','country','zip_code','annual_revenue','assigned_to','created_at','updated_at',]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
+        extra_kwargs = {
+            'name':{
+                # 'required':True,
+                # 'allow_null':False,
+                'allow_blank':False,
+                'error_messages': {
+                    'blank': 'Please fill out company name',
+                    'null': 'name  is required.',
+                    'required':"name is required."
+                },
+                'validators': []
+            },
+            'domain':{
+                # 'required':True,
+                # 'allow_null':False,
+                'allow_blank':False,
+                'error_messages': {
+                    'blank': 'Please fill out your domain',
+                    'null': 'domain  is required.',
+                    'required':"domain is required."
+                }
+            },
+            'industry':{
+                'required':True,
+                'allow_null':False,
+                'allow_blank':False,
+                'error_messages': {
+                    'blank': 'Please fill out your industry',
+                    'null': 'industry  is required.',
+                    'required':"industry is required."
+                }
+            },
+            'address':{
+                'required':True,
+                'allow_null':False,
+                'allow_blank':False,
+                'error_messages': {
+                    'blank': 'Please fill out your address',
+                    'null': 'address  is required.',
+                    'required':"address is required."
+                }
+            },
+            'city':{
+                'required':True,
+                'allow_null':False,
+                'allow_blank':False,
+                'error_messages': {
+                    'blank': 'Please fill out your city',
+                    'null': 'city is required.',
+                    'required':"city is required."
+                }
+            },
+            'state':{
+                'required':True,
+                'allow_null':False,
+                'allow_blank':False,
+                'error_messages': {
+                    'blank': 'Please fill out your state',
+                    'null': 'state is required.',
+                    'required':"state is required."
+                }
+            },
+            'country':{
+                'required':True,
+                'allow_null':False,
+                'allow_blank':False,
+                'error_messages': {
+                    'blank': 'Please fill out your country',
+                    'null': 'country is required.',
+                    'required':"country is required."
+                }
+            },
+            'annual_revenue':{
+                'required':True,
+                'allow_null':False,
+                "error_messages":{
+                'invalid': 'Please enter a valid numeric annual_revenue with digits only.',
+                'required': 'annual_revenue field is required',
+                'null': 'annual_revenue is required'
+                },
+                'validators': []
+            },
+            'zip_code':{
+                'required':True,
+                'allow_null':False,
+                'allow_blank':False,
+                'error_messages': {
+                    'blank': 'Please fill out your zip_code',
+                    'null': 'zip_code is required.',
+                    'required':"zip_code is required."
+                }
+            },
+        }
+
     def validate_name(self, value):
         """Ensure company names are unique (case-insensitive check on updates/creates)."""
-
-        instance = getattr(self, 'instance', None)
+        print('in validsd')
         query = Company.objects.filter(name__iexact=value)
-        if instance:
-            query = query.exclude(id=instance.id)
+        if self.instance:
+            print(self.instance)
+            query = query.exclude(id=self.instance.id)
         if query.exists():
-            raise serializers.ValidationError("A company with this name already exists.")
+            raise serializers.ValidationError("A company with this name already exists.gjhtyjtyj")
         return value
 
 
@@ -32,7 +126,7 @@ class ContactSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Contact
-        fields = ['id','first_name','last_name','email','phone','job_title','department','company',
+        fields = ['id','first_name','last_name','email','phone','job_title','department','company','company_detail',
                 'source','converted_from_lead','assigned_to','created_at','updated_at',]
         read_only_fields = ['id', 'created_at', 'updated_at','company','job_title','department','converted_from_lead','assigned_to']
         extra_kwargs = {
@@ -84,6 +178,11 @@ class ContactSerializer(serializers.ModelSerializer):
                 },
             },
         }
+        
+    def validate_phone(self,value):
+        if value<6000000000 or value>9999999999:
+            raise serializers.ValidationError('Mobile Nmber must be according to valid 10 digit indian Number.')
+        return value
 
 
     def validate(self, attrs):
@@ -100,7 +199,7 @@ class ContactSerializer(serializers.ModelSerializer):
             if user.email == email:
                 errors['email'] = "This email is already registered."
             if user.phone == phone:
-                errors['mobile'] = "This mobile number is already in use."
+                errors['phone'] = "This phone number is already in use."
 
         # company = attrs.get('company')
         # if company is None and self.instance:

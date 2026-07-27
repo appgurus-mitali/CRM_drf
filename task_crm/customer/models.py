@@ -11,7 +11,7 @@ class ContactSource(models.TextChoices):
 
 class Company(models.Model):
     name = models.CharField(max_length=200, unique=True,null=False,blank=False)
-    domain = models.URLField(blank=True, null=True)
+    domain = models.CharField(blank=True, null=True)
     industry = models.CharField(max_length=100, blank=True, null=True)  
     company_detail = models.TextField(blank=True, null=True)
     website = models.URLField(max_length=250, blank=True, null=True)
@@ -48,7 +48,7 @@ class Contact(models.Model):
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
     email = models.EmailField(unique=True)
-    phone = models.CharField(max_length=20, blank=True, null=True,unique=True)
+    phone = models.BigIntegerField(null=True,unique=True)
 
     source = models.CharField(max_length=30, choices=ContactSource.choices, default=ContactSource.REFERRAL)
     converted_from_lead = models.ForeignKey(
@@ -62,12 +62,13 @@ class Contact(models.Model):
     assigned_to = models.ForeignKey(
         MyUser,
         on_delete=models.SET_NULL,
-        # null=True,
-        # blank=True,
+        null=True,
+        blank=True,
         related_name='contacts'
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
 
     def __str__(self):
         if self.company:

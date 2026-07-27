@@ -1,7 +1,9 @@
 from .models import Lead,LeadStatus,LeadSource,Priority
 from .serializers import LeadSerializer
-from authentication.models import MyUser
+from authentication.models import MyUser,ActivityModule,ActivityAction,ActivityLog
 from customer.models import Company,Contact
+
+from authentication.activities import log_activity
 
 from rest_framework.decorators import api_view,permission_classes
 from rest_framework.permissions import IsAdminUser,IsAuthenticated
@@ -35,21 +37,28 @@ def lead_view(request,pk=None):
 
     try:
         lead = Lead.objects.get(pk=pk)
+        # print(lead.assigned_lead,lead.assigned_lead!=request.user)
+
+        if lead.assigned_lead is not None and lead.assigned_lead!=request.user:
+            return Response({"status": 0,"message":'Unauthorized Update. You cannot update this lead.', 'data':{}},status=status.HTTP_403_FORBIDDEN)
 
         if request.method in ['PUT', 'PATCH']:
                 partial = (request.method == 'PATCH')
                 serializer = LeadSerializer(lead, data=request.data, partial=partial)
                 if serializer.is_valid():
-                    serializer.save()
+                    updated_lead = serializer.save()
+                    log_activity(user=request.user,module=ActivityModule.LEAD,action=ActivityAction.UPDATE,object_id=updated_lead.id,description=f"Updated details for lead '{updated_lead.first_name} {updated_lead.last_name}'.")
                     return Response({'status':1,'message':f'Lead Updated Successfully','data':serializer.data},status=status.HTTP_200_OK)
                 errors={key:err[0] for key,err in serializer.errors.items()}
                 return Response({'status':0,'message':'Validation failed.','error':errors},status=status.HTTP_400_BAD_REQUEST)
         
         elif request.method == 'DELETE':
+            print('in delete lead')
+            log_activity(user=request.user,module=ActivityModule.LEAD,action=ActivityAction.DELETE,object_id=lead.id,description=f"Deleted lead '{lead.first_name}'.")
             lead.delete()
-            return Response({"success": 0,"message": "Lead deleted successfully.","data": {}}, status=status.HTTP_204_NO_CONTENT)
+            return Response({"status": 0,"message": "Lead deleted successfully.","data": {}}, status=status.HTTP_200_OK)
     except Lead.DoesNotExist:
-        return Response({"success": 0,"message": f"Lead with ID {pk} does not exist.","data": {}},status=status.HTTP_404_NOT_FOUND)
+        return Response({"status": 0,"message": f"Lead with ID {pk} does not exist.","data": {}},status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
             print("\n\nException in reg")
             traceback.print_exc()
@@ -60,7 +69,8 @@ def create_leadview(request):
     try:
         serializer = LeadSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            lead = serializer.save()
+            log_activity(user=None,module=ActivityModule.LEAD,action=ActivityAction.CREATE,object_id=lead.id,description=f"Created new lead '{lead.first_name} {lead.last_name}'.")
             return Response({'status':1,'message':f'Lead Created Successfully','data':serializer.data},status=status.HTTP_201_CREATED)
         errors={key:err[0] for key,err in serializer.errors.items()}
         return Response({'status':0,'message':'Validation failed.','error':errors},status=status.HTTP_400_BAD_REQUEST)
@@ -77,19 +87,22 @@ def lead_assign_view(request,pk):
         user_id = request.data.get('assigned_lead') or request.data.get('user_id')
 
         if user_id is None or user_id=='':
-            return Response({"success": 0,"message": "Invalid data.",'errors':{'user_id':"user_id or assigned_lead is required."}}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"status": 0,"message": "Invalid data.",'errors':{'user_id':"user_id or assigned_lead is required."}}, status=status.HTTP_400_BAD_REQUEST)
         if not MyUser.objects.filter(id=user_id).exists():
-            return Response({"success": 0,"message": "User does not exist.",'data':{}}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"status": 0,"message": "User does not exist.",'data':{}}, status=status.HTTP_404_NOT_FOUND)
+        if lead.assigned_lead is not None:
+                    return Response({"status": 0,"message": f"Already assinged lead to {lead.assigned_lead}",'data':{}}, status=status.HTTP_400_BAD_REQUEST)
 
         lead.assigned_lead_id = user_id
         lead.save()
-        return Response({"success": 1,"message": f"Lead assigned to user ID {user_id} successfully.",'data':{}}, status=status.HTTP_200_OK)
+        log_activity(user=request.user,module=ActivityModule.LEAD,action=ActivityAction.UPDATE,object_id=lead.id,description=f"Assigned lead '{lead.first_name} {lead.last_name}' to user id'{user_id}'.")
+        return Response({"status": 1,"message": f"Lead assigned to user ID {user_id} successfully.",'data':{}}, status=status.HTTP_200_OK)
     except Lead.DoesNotExist:
-            return Response({"success": 0,"success": 0,"message": f"Lead with ID {pk} does not exist.","data": {}},status=status.HTTP_404_NOT_FOUND)
+            return Response({"status": 0,"message": f"Lead with ID {pk} does not exist.","data": {}},status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
             print("\n\nException in reg")
             traceback.print_exc()
-            return Response({"success": 0,'status':0,'message':'An Internal Server Error Occurred. Pls check terminal.','data':{}},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"status": 0,'status':0,'message':'An Internal Server Error Occurred. Pls check terminal.','data':{}},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
@@ -97,22 +110,26 @@ def lead_status_update_view(request,pk):
     try:
         lead = Lead.objects.get(id=pk)
         if lead.assigned_lead!=request.user:
-            return Response({"success": 0,"message":'Unauthorized Update. You cannot update this lead.', 'data':{}},status=status.HTTP_403_FORBIDDEN)
+            return Response({"status": 0,"message":'Unauthorized Update. You cannot update this lead.', 'data':{}},status=status.HTTP_403_FORBIDDEN)
         
         new_status = request.data.get('status')
 
         if not new_status :
             return Response(
-                {"success": 0,"message":'Invalid data.', 'error':{'status':"Status is required."}}, status=status.HTTP_400_BAD_REQUEST)
+                {"status": 0,"message":'Invalid data.', 'error':{'status':"Status is required."}}, status=status.HTTP_400_BAD_REQUEST)
         elif new_status not in LeadStatus.values:
             return Response(
-                {"success": 0,"message": f"Invalid data.",'error':{'status':f"Invalid status. Allowed choices: {LeadStatus.values}"}}, status=status.HTTP_400_BAD_REQUEST)
-        
+                {"status": 0,"message": f"Invalid data.",'error':{'status':f"Invalid status. Allowed choices: {LeadStatus.values}"}}, status=status.HTTP_400_BAD_REQUEST)
+
+        old_status  = lead.status
         lead.status = new_status
+        log_activity(user=request.user,module=ActivityModule.LEAD,action=ActivityAction.UPDATE,object_id=lead.id,
+                    description=f"Updated status for lead '{lead.first_name} {lead.last_name}' from '{old_status}' to '{new_status}'.",
+                    changes={'status': {'from': old_status, 'to': new_status}})
         lead.save()
-        return Response({"success": 1,"message": f"Lead status updated to '{new_status}'.",'data':{}}, status=status.HTTP_200_OK)
+        return Response({"status": 1,"message": f"Lead status updated to '{new_status}'.",'data':{}}, status=status.HTTP_200_OK)
     except Lead.DoesNotExist:
-        return Response({"success": 0,"message": f"Lead with ID {pk} does not exist.","data": {}},status=status.HTTP_404_NOT_FOUND)
+        return Response({"status": 0,"message": f"Lead with ID {pk} does not exist.","data": {}},status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         print("\n\nException in reg")
         traceback.print_exc()
@@ -124,7 +141,7 @@ def lead_convert_view(request,pk):
     try:
         lead = Lead.objects.get(id=pk)
         if lead.assigned_lead!=request.user:
-            return Response({"success": 0,"message":'Unauthorized Update. You cannot update this lead.', 'data':{}},status=status.HTTP_403_FORBIDDEN)
+            return Response({"status": 0,"message":'Unauthorized Update. You cannot update this lead.', 'data':{}},status=status.HTTP_403_FORBIDDEN)
         
         with transaction.atomic():
             lead.is_converted=True
@@ -146,7 +163,7 @@ def lead_convert_view(request,pk):
 
             contact, created = Contact.objects.get_or_create(
                 email__iexact=lead.email.strip(),
-                phone__iecaxt = lead.phone,
+                phone = lead.phone,
                 defaults={
                     'first_name': lead.first_name,
                     'last_name': lead.last_name,
@@ -166,23 +183,16 @@ def lead_convert_view(request,pk):
                 contact.save()
 
             lead.is_converted = True
+            lead.status = LeadStatus.QUALIFIED
             lead.save()
+            log_activity(user=request.user,module=ActivityModule.LEAD,action=ActivityAction.CONVERT,object_id=lead.id,
+                        description=f"Converted lead '{lead.first_name} {lead.last_name}' into Contact (ID: {contact.id}).")
 
-        return Response(
-            {
-                "success": 1,
-                "message": f"Lead '{lead.first_name} {lead.last_name}' converted successfully!",
-                "data": {
-                    "lead_id": lead.id,
-                    "contact_id": contact.id,
-                    "company_id": company_instance.id if company_instance else None
-                }
-            },
-            status=status.HTTP_200_OK
-        )
+        return Response({"status": 1,"message": f"Lead '{lead.first_name} {lead.last_name}' converted successfully!",
+                        "data": {"lead_id": lead.id,"contact_id": contact.id,"company_id": company_instance.id if company_instance else None}},status=status.HTTP_200_OK)
 
     except Lead.DoesNotExist:
-        return Response({"success": 0,"message": f"Lead with ID {pk} does not exist.","data": {}},status=status.HTTP_404_NOT_FOUND)
+        return Response({"status": 0,"message": f"Lead with ID {pk} does not exist.","data": {}},status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         print("\n\nException in reg")
         traceback.print_exc()

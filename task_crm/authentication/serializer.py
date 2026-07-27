@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import MyUser
+from .models import MyUser,ActivityLog
 import re
 from datetime import datetime,date
 from django.db.models import Q
@@ -131,6 +131,14 @@ class MyUserSerializer(serializers.ModelSerializer):
             if user.mobile == mobile:
                 errors['mobile'] = "This mobile number is already in use."
 
+        password = attrs.get('password')
+        if self.instance and password:
+            if not self.instance.check_password(password):
+                errors['password'] = "Incorrect password. Profile update denied."
+
+        if errors:
+            raise serializers.ValidationError(errors)
+
         if errors:
             raise serializers.ValidationError(errors)
 
@@ -155,17 +163,17 @@ class MyUserSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         password = validated_data.pop('password', None)
         
-        if password is not None:
-            instance.set_password(password)
-            instance.save()
+        # if password is not None:
+        #     instance.set_password(password)
+        #     instance.save()
 
         return super().update(instance, validated_data)
-    
-{
-    "status": 1,
-    "message": "login successful. Welcome Jerry",
-    "data": {
-        "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzg0ODA5OTQzLCJpYXQiOjE3ODQ3OTU1NDMsImp0aSI6IjgwMDE3MGNiY2RmZTRkMWU4OTEwZGQxNTg4ZTkzNTgyIiwidXNlcl9pZCI6IjMiLCJlbWFpbCI6ImplcnJ5QG1pY2UuY29tIiwidXNlcm5hbWUiOiJKZXJyeSJ9.Wu4-Gniwy4hUACVGEohE8h9jHJLDLIYXO-qf0ykyIE0",
-        "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc4NDgzODc0MywiaWF0IjoxNzg0Nzk1NTQzLCJqdGkiOiJlMjI2ZmZkYTBmNWY0NjY0ODg5OGViYjgzYjZmYjhjNyIsInVzZXJfaWQiOiIzIiwiZW1haWwiOiJqZXJyeUBtaWNlLmNvbSIsInVzZXJuYW1lIjoiSmVycnkifQ.XKjDrTqWptjwpgQ_hullqH2RfwS2ksDqqVn2gv89ozU"
-    }
-}
+
+
+
+class ActivityLogSerializer(serializers.ModelSerializer):
+    # user_name = serializers.CharField(source='user.get_full_name', read_only=True)
+
+    class Meta:
+        model = ActivityLog
+        fields = ['id', 'user', 'action', 'entity_type', 'entity_id', 'description', 'changes', 'created_at']#, 'user_name'
