@@ -8,11 +8,11 @@ import re
 from django.db.models import Q
 
 from rest_framework.decorators import api_view,permission_classes
-from rest_framework.permissions import IsAdminUser,IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.tokens import RefreshToken, TokenError, AccessToken
 
 # Create your views here.
 @api_view(['POST'])
@@ -105,9 +105,8 @@ def profile(request):
     
     elif request.method =='DELETE':
         try:
-            # user = MyUser.objects.get(id = request.user.id)
             user = request.user
-            log_activity(user=updated_user,module=ActivityModule.USER,action=ActivityAction.DELETE,
+            log_activity(user=user,module=ActivityModule.USER,action=ActivityAction.DELETE,
                                         object_id=user.id,description="User profile deleted.")
             user.delete()
             return Response({'status':1,'message':"Account deleted Successfully.",'data':{}},status=status.HTTP_200_OK)
@@ -175,6 +174,46 @@ def change_password(request):
         return Response({'status': 0, 'message': 'An Internal Server Error Occurred.'},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+from rest_framework_simplejwt.token_blacklist.models import OutstandingToken, BlacklistedToken
+from django.utils.timezone import make_aware
+from datetime import datetime
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def logout_view(request):
+    refresh_token = request.data.get('refresh')
+    auth_header = request.headers.get('Authorization')
+
+    if not refresh_token:
+        return Response({'status': 0, 'message': 'Refresh token is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        ref = RefreshToken(refresh_token)
+        ref.blacklist()
+
+        if auth_header and auth_header.startswith('Bearer '):
+            raw_access_token = auth_header.split(' ')[1]
+            acc = AccessToken(raw_access_token)
+            expires_at = make_aware(datetime.fromtimestamp(acc['exp']))
+
+            # Create or fetch the OutstandingToken record for the Access Token
+            outstanding_acc, _ = OutstandingToken.objects.get_or_create(
+                jti=acc['jti'],
+                defaults={
+                    'user': request.user,
+                    'token': raw_access_token,
+                    'created_at': datetime.now(),
+                    'expires_at': expires_at,
+                }
+            )
+
+            # Insert into BlacklistedToken table
+            BlacklistedToken.objects.get_or_create(token=outstanding_acc)
+
+        return Response({'status': 1, 'message': 'Successfully logged out and tokens revoked.'}, status=status.HTTP_200_OK)
+
+    except TokenError:
+        return Response({'status': 0, 'message': 'Token is invalid or already blacklisted.'}, status=status.HTTP_400_BAD_REQUEST)
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def activity_feed_view(request):
@@ -195,16 +234,6 @@ def activity_feed_view(request):
         # logs = logs[:50]
 
         serializer = ActivityLogSerializer(logs, many=True)
-        return Response(
-            {
-                'status': 1,
-                'message': 'Your activity logs retrieved successfully.',
-                'data': serializer.data
-            },
-            status=status.HTTP_200_OK
-        )
+        return Response({'status': 1,'message': 'Your activity logs retrieved successfully.','data': serializer.data},status=status.HTTP_200_OK)
     except Exception:
-        return Response(
-            {'status': 0, 'message': 'An internal server error occurred.'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        return Response({'status': 0, 'message': 'An internal server error occurred.'},status=status.HTTP_500_INTERNAL_SERVER_ERROR)

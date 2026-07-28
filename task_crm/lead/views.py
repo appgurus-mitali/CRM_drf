@@ -2,6 +2,8 @@ from .models import Lead,LeadStatus,LeadSource,Priority
 from .serializers import LeadSerializer
 from authentication.models import MyUser,ActivityModule,ActivityAction,ActivityLog
 from customer.models import Company,Contact
+from sales.models import Deal,DealStage,FollowUp
+from sales.serializers import DealSerializer
 
 from authentication.activities import log_activity
 
@@ -144,15 +146,12 @@ def lead_convert_view(request,pk):
             return Response({"status": 0,"message":'Unauthorized Update. You cannot update this lead.', 'data':{}},status=status.HTTP_403_FORBIDDEN)
         
         with transaction.atomic():
-            lead.is_converted=True
-
             company_instance = None
 
             if lead.company_name and lead.company_name.strip():
-                company_name_clean = lead.company_name.lower().strip()
-
-                company_instance, company_created = Company.objects.get_or_create(name__iexact=company_name_clean,
-                                                                                defaults={'name': company_name_clean,'assigned_to': lead.assigned_lead})
+                company_name = lead.company_name.strip()
+                company_instance, company_created = Company.objects.get_or_create(name__iexact=company_name,
+                                                                                defaults={'name': company_name,'assigned_to': lead.assigned_lead})
 
                 # company_instance = Company.objects.filter(name__iexact=company_name_clean).first()
                 # if not company_instance:
@@ -160,6 +159,8 @@ def lead_convert_view(request,pk):
                 #         name=company_name_clean,
                 #         assigned_to=lead.assigned_lead
                 #     )
+                log_activity(user=request.user,module=ActivityModule.COMPANY,action=ActivityAction.CREATE,object_id=company_instance.id,
+                                        description=f"Auto-created Company {company_instance.name} from lead conversion' ")
 
             contact, created = Contact.objects.get_or_create(
                 email__iexact=lead.email.strip(),
@@ -179,6 +180,8 @@ def lead_convert_view(request,pk):
             if not created:
                 if company_instance:
                     contact.company = company_instance
+                    contact.job_title = None
+                    contact.department =None
                 contact.converted_from_lead = lead
                 contact.save()
 
@@ -188,9 +191,44 @@ def lead_convert_view(request,pk):
             log_activity(user=request.user,module=ActivityModule.LEAD,action=ActivityAction.CONVERT,object_id=lead.id,
                         description=f"Converted lead '{lead.first_name} {lead.last_name}' into Contact (ID: {contact.id}).")
 
-        return Response({"status": 1,"message": f"Lead '{lead.first_name} {lead.last_name}' converted successfully!",
-                        "data": {"lead_id": lead.id,"contact_id": contact.id,"company_id": company_instance.id if company_instance else None}},status=status.HTTP_200_OK)
+            response_data = {
+                'lead_id': lead.id,
+                'contact_id': contact.id,
+                'company_id': company_instance.id if company_instance else None
+            }
+            message = f"Lead '{lead.first_name} {lead.last_name}' converted successfully!"
 
+            deal_instance = None
+            # if getattr(lead, 'estimated_value', None) or getattr(lead, 'title', None):
+            title = request.data.get("title",None)
+            if title is not None:
+                deal_data = request.data
+                deal_data['contact'] = contact.id
+                serializer = DealSerializer(data=request.data)
+                if serializer.is_valid():
+                    deal = serializer.save(
+                        assigned_to=lead.assigned_lead,
+                        company=company_instance,
+                        contact=contact
+                    )
+                    response_data['deal_id']=deal.id
+
+                    log_activity(
+                        user=request.user,
+                        module=ActivityModule.DEAL,
+                        action=ActivityAction.CREATE,
+                        object_id=deal.id,
+                        description=f"Auto-created Deal '{deal.title}' during lead conversion."
+                    )
+                else:
+                    deal_errors = {key: err[0] for key, err in serializer.errors.items()}
+                    deal_warning = {
+                        'message': 'Deal auto-creation failed validation. Please create the deal manually using the deals endpoint.',
+                        'errors': deal_errors
+                    }
+                    return Response({'status': 1, 'message': message, 'data': response_data,'deal_warning':deal_warning},status=status.HTTP_200_OK)
+            return Response({'status': 1, 'message': message, 'data': response_data},status=status.HTTP_200_OK)
+        return Response({"status": 0,"message": f"Lead conversion failed!","data": {}},status=status.HTTP_200_OK)
     except Lead.DoesNotExist:
         return Response({"status": 0,"message": f"Lead with ID {pk} does not exist.","data": {}},status=status.HTTP_404_NOT_FOUND)
     except Exception as e:

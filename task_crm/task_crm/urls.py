@@ -22,6 +22,6 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('auth/',include('authentication.urls')),
     path('leadapi/',include('lead.urls')),
-    path('customerapi/',include('customer.urls')),
-    # path('salesapi/',include('sales.urls')),
+    path('customer/',include('customer.urls')),
+    path('sales/',include('sales.urls')),
 ]

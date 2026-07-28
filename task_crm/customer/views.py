@@ -2,7 +2,7 @@ from .models import Company,Contact
 from .serializers import CompanySerializer,ContactSerializer
 
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAdminUser, IsAuthenticated
+from rest_framework.permissions import  IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
@@ -101,14 +101,14 @@ def contact_list_create_view(request,company_id=None):
     elif request.method == 'POST':
         try:
             data = request.data
-            company_id = company_id or data.get('company_id',None)
+            company_id = company_id
             company = None
             job_title = None
             department = None
             assigned_to = request.user
             errors = {}
             if company_id is not None:
-                company = Company.objects.get(pk=company_id)
+                company = Company.objects.get(pk=company_id)    
                 job_title = data.get('job_title')
                 department = data.get('department')
                 assigned_to = company.assigned_to
@@ -174,19 +174,19 @@ def contact_detail_view(request, pk):
         contact.delete()
         return Response({'status': 1, 'message': 'Contact deleted successfully.', 'data': {}},status=status.HTTP_200_OK)
 
-@api_view(['POST'])
+@api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
-def add_company_contact_view(request, company_id):
+def add_company_contact_view(request, pk, company_id):
     """Directly attach a secondary stakeholder/colleague to an existing Company."""
     try:
+        contact = Contact.objects.get(pk=pk)
         company = Company.objects.get(pk=company_id)
+    except Contact.DoesNotExist:
+        return Response({'status': 0, 'message': f'Contact with ID {company_id} does not exist.', 'data': {}},status=status.HTTP_404_NOT_FOUND)
     except Company.DoesNotExist:
-        return Response({'status': 0, 'message': f'Company with ID {company_id} does not exist.', 'data': {}},status=status.HTTP_404_NOT_FOUND)
+            return Response({'status': 0, 'message': f'Company with ID {company_id} does not exist.', 'data': {}},status=status.HTTP_404_NOT_FOUND)
 
     data = request.data
-    # data['company'] = company.id
-    # data['assigned_to'] = request.user
-
     errors = {}
     job_title = request.data.get('job_title',None)
     if job_title is None or job_title=="":
@@ -197,11 +197,10 @@ def add_company_contact_view(request, company_id):
 
     if errors:
         return Response({'status': 0, 'message': 'Validation failed.', 'error': errors},status=status.HTTP_400_BAD_REQUEST)
-
     
-    serializer = ContactSerializer(data=data)
+    serializer = ContactSerializer(contact,data = request.data,partial=True)
     if serializer.is_valid():
-        contact = serializer.save(company=company,assigned_to = company.assigned_to.user,job_title=job_title,department = department)
+        contact = serializer.save(company=company,assigned_to = company.assigned_to,job_title=job_title,department = department)
         log_activity(user=request.user, module=ActivityModule.CONTACT, action=ActivityAction.CREATE, object_id=contact.id, description=f"Added contact '{contact.first_name} {contact.last_name}' to company '{company.name}'")
         return Response({'status': 1, 'message': f'Contact added to company "{company.name}" successfully.', 'data': serializer.data},status=status.HTTP_201_CREATED)
     errors = {key: err[0] for key, err in serializer.errors.items()}

@@ -1,4 +1,5 @@
 import traceback
+
 from django.db.models import Sum, Count
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -17,7 +18,7 @@ def deal_view(request, pk=None):
     if request.method == 'GET':
         try:
             if pk:
-                deal = Deal.objects.get(pk=pk)
+                deal = Deal.objects.get(pk=pk)#.prefetch_related()
                 serializer = DealSerializer(deal)
             else:
                 deals = Deal.objects.all()
@@ -26,33 +27,74 @@ def deal_view(request, pk=None):
         except Deal.DoesNotExist:
             return Response({'status': 0, 'message': f'Deal with ID {pk} does not exist.', 'data': {}}, status=status.HTTP_404_NOT_FOUND)
 
-    # CREATE
     if request.method == 'POST':
         serializer = DealSerializer(data=request.data)
         if serializer.is_valid():
-            deal = serializer.save(assigned_to=request.user if not request.data.get('assigned_to') else None)
+            company = serializer.validated_data.get('contact').company
+            deal = serializer.save(assigned_to=request.user,company = company)
             log_activity(
                 user=request.user, module=ActivityModule.DEAL, action=ActivityAction.CREATE,
                 object_id=deal.id, description=f"Created deal '{deal.title}' (${deal.value})."
             )
             return Response({'status': 1, 'message': 'Deal created successfully.', 'data': serializer.data}, status=status.HTTP_201_CREATED)
-        return Response({'status': 0, 'message': 'Validation error.', 'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        errors = {key: err[0] for key, err in serializer.errors.items()}
+        return Response({'status': 0, 'message': 'Validation error.', 'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
 
-    # UPDATE / DELETE
     try:
         deal = Deal.objects.get(pk=pk)
 
-        if request.method in ['PUT', 'PATCH']:
-            serializer = DealSerializer(deal, data=request.data, partial=(request.method == 'PATCH'))
-            if serializer.is_valid():
-                deal = serializer.save()
-                log_activity(
-                    user=request.user, module=ActivityModule.DEAL, action=ActivityAction.UPDATE,
-                    object_id=deal.id, description=f"Updated deal '{deal.title}'."
-                )
-                return Response({'status': 1, 'message': 'Deal updated successfully.', 'data': serializer.data})
-            return Response({'status': 0, 'message': 'Validation error.', 'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        if deal.assigned_to!=request.user:
+            return Response({"status": 0,"message":'Unauthorized Update. You cannot update this deal.', 'data':{}},status=status.HTTP_403_FORBIDDEN)
 
+        # if request.method in ['PUT', 'PATCH']:
+        #     serializer = DealSerializer(deal, data=request.data, partial=(request.method == 'PATCH'))
+        #     if serializer.is_valid():
+        #         deal = serializer.save(assigned_to = request.user)
+        #         log_activity(
+        #             user=request.user, module=ActivityModule.DEAL, action=ActivityAction.UPDATE,
+        #             object_id=deal.id, description=f"Updated deal '{deal.title}'."
+        #         )
+        #         return Response({'status': 1, 'message': 'Deal updated successfully.', 'data': serializer.data})
+        #     return Response({'status': 0, 'message': 'Validation error.', 'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+        if request.method in ['PUT', 'PATCH']:
+            # Fields tracked for field-by-field log comparison
+            tracked_fields = ['title', 'value', 'stage', 'expected_close_date', 'company_id', 'contact_id', 'assigned_to_id', 'description']
+            old_values = {field: getattr(deal, field) for field in tracked_fields}
+
+            serializer = DealSerializer(deal, data=request.data, partial=(request.method == 'PATCH'))
+            if not serializer.is_valid():
+                errors = {key: err[0] for key, err in serializer.errors.items()}
+                return Response({'status': 0, 'message': 'Validation error.', 'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
+
+            # with transaction.atomic():
+            updated_deal = serializer.save()
+
+            # Loop through tracked fields to detect dynamic changes
+            changes = []
+            for field in tracked_fields:
+                old_val = old_values[field]
+                new_val = getattr(updated_deal, field)
+
+                if old_val != new_val:
+                    field_display = field.replace('_id', '')
+                    changes.append(f"{field_display} from '{old_val}' to '{new_val}'")
+
+            # Construct activity log entry
+            if changes:
+                log_description = f"Updated Deal '{updated_deal.title}': Changed {', '.join(changes)}."
+            else:
+                log_description = f"Updated Deal '{updated_deal.title}' (no field changes detected)."
+
+                log_activity(
+                    user=request.user,
+                    module=ActivityModule.DEAL,
+                    action=ActivityAction.UPDATE,
+                    object_id=updated_deal.id,
+                    description=log_description
+                )
+
+            return Response({'status': 1, 'message': 'Deal updated successfully.', 'data': serializer.data}, status=status.HTTP_200_OK)
         elif request.method == 'DELETE':
             deal_id, title = deal.id, deal.title
             deal.delete()
@@ -118,7 +160,7 @@ def followup_view(request, pk=None):
         if pk:
             try:
                 followup = FollowUp.objects.get(pk=pk)
-                return Response({'status': 1, 'message': 'Success.', 'data': FollowUpSerializer(followup).data})
+                return Response({'status': 1, 'message': 'Followups :', 'data': FollowUpSerializer(followup).data})
             except FollowUp.DoesNotExist:
                 return Response({'status': 0, 'message': 'FollowUp not found.', 'data': {}}, status=status.HTTP_404_NOT_FOUND)
         
@@ -130,23 +172,38 @@ def followup_view(request, pk=None):
         if serializer.is_valid():
             f = serializer.save(assigned_to=request.user if not request.data.get('assigned_to') else None)
             log_activity(
-                user=request.user, module=ActivityModule.TASK, action=ActivityAction.CREATE,
+                user=request.user, module=ActivityModule.FOLLOWUP, action=ActivityAction.CREATE,
                 object_id=f.id, description=f"Scheduled follow-up '{f.title}' for {f.scheduled_at}."
             )
             return Response({'status': 1, 'message': 'Follow-up scheduled.', 'data': serializer.data}, status=status.HTTP_201_CREATED)
-        return Response({'status': 0, 'message': 'Validation error.', 'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        errors = {key: err[0] for key, err in serializer.errors.items()}
+        return Response({'status': 0, 'message': 'Validation error.', 'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
 
     # UPDATE / DELETE
     try:
         f = FollowUp.objects.get(pk=pk)
+        if f.assigned_to!=request.user:
+            return Response({"status": 0,"message":'Unauthorized Update. You cannot update this deal.', 'data':{}},status=status.HTTP_403_FORBIDDEN)
+        
+
         if request.method in ['PUT', 'PATCH']:
             serializer = FollowUpSerializer(f, data=request.data, partial=(request.method == 'PATCH'))
             if serializer.is_valid():
                 f = serializer.save()
+                log_activity(
+                                user=request.user, module=ActivityModule.FOLLOWUP, action=ActivityAction.UPDATE,
+                                object_id=f.id, description=f"follow-up '{f.title}' updated."
+                            )
                 return Response({'status': 1, 'message': 'Follow-up updated.', 'data': serializer.data})
-            return Response({'status': 0, 'message': 'Validation error.', 'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+            
+            errors = {key: err[0] for key, err in serializer.errors.items()}
+            return Response({'status': 0, 'message': 'Validation error.', 'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
 
         elif request.method == 'DELETE':
+            log_activity(
+                user=request.user, module=ActivityModule.FOLLOWUP, action=ActivityAction.DELETE,
+                object_id=f.id, description=f"follow-up '{f.title}' deleting..."
+            )
             f.delete()
             return Response({'status': 1, 'message': 'Follow-up deleted.', 'data': {}})
     except FollowUp.DoesNotExist:

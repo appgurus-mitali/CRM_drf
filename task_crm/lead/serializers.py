@@ -5,8 +5,8 @@ from django.db.models import Q
 class LeadSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lead
-        fields = ['id','first_name','last_name','email','phone','company_name','description','status','source','priority','assigned_lead','created_at','updated_at']
-        read_only_fields = ['id','created_at','status','assigned_lead']
+        fields = ['id','first_name','last_name','email','phone','company_name','description','status','source','priority','assigned_lead','created_at','updated_at','status']
+        read_only_fields = ['id','created_at','assigned_lead']
         extra_kwargs = {
             'first_name':{
                 'required':True,
@@ -59,7 +59,12 @@ class LeadSerializer(serializers.ModelSerializer):
                 "error_messages":{
                     'invalid_choice': f'Invalid Priority. Please choose a valid choice.Allowed choices: {Priority.values}',
                 },
-            }
+            },
+            'status':{
+                "error_messages":{
+                    'invalid_choice': f'Invalid status. Please choose a valid choice.Allowed choices: {LeadStatus.values}',
+                },
+            },
         }
 
     def validate_phone(self,value):
