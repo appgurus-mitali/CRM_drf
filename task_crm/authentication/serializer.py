@@ -170,10 +170,9 @@ class MyUserSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 
-
 class ActivityLogSerializer(serializers.ModelSerializer):
     # user_name = serializers.CharField(source='user.get_full_name', read_only=True)
 
     class Meta:
         model = ActivityLog
-        fields = ['id', 'user', 'action', 'entity_type', 'entity_id', 'description', 'changes', 'created_at']#, 'user_name'
+        fields = ['id', 'user', 'action', 'module', 'object_id', 'description', 'changes', 'created_at']#, 'user_name'

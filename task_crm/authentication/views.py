@@ -5,6 +5,7 @@ from .activities import log_activity
 import traceback
 import re
 
+import django_filters
 from django.db.models import Q
 
 from rest_framework.decorators import api_view,permission_classes
@@ -79,18 +80,10 @@ def profile(request):
     
     elif request.method in ['PUT','PATCH']:
         try:
-            # user = MyUser.objects.get(id= request.user.id)
             user = request.user
             serializer = MyUserSerializer(user,data = request.data,partial=(request.method=='PATCH'))
             if serializer.is_valid():
                 updated_user = serializer.save()
-
-                # changes = {}
-                # for field, old_val in user.items():
-                #     new_val = getattr(updated_user, field)
-                #     if old_val != new_val:
-                #         changes[field] = {'from': old_val, 'to': new_val}
-
                 log_activity(user=updated_user,module=ActivityModule.USER,action=ActivityAction.UPDATE,
                             object_id=updated_user.id,description="Updated profile information.")#,changes=changes if changes else None)
                 return Response({'status':1,'message':f'Profile Details updated Successfully.','data':serializer.data},status=status.HTTP_202_ACCEPTED)
@@ -205,14 +198,38 @@ def logout_view(request):
                     'expires_at': expires_at,
                 }
             )
-
-            # Insert into BlacklistedToken table
             BlacklistedToken.objects.get_or_create(token=outstanding_acc)
-
         return Response({'status': 1, 'message': 'Successfully logged out and tokens revoked.'}, status=status.HTTP_200_OK)
 
     except TokenError:
         return Response({'status': 0, 'message': 'Token is invalid or already blacklisted.'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ActivityLogFilter(django_filters.FilterSet):
+    module = django_filters.CharFilter(field_name='module', lookup_expr='iexact')
+    action = django_filters.CharFilter(field_name='action', lookup_expr='iexact')
+    user = django_filters.NumberFilter(field_name='user__id')
+
+    from_date = django_filters.DateTimeFilter(field_name='created_at', lookup_expr='gte')
+    to_date = django_filters.DateTimeFilter(field_name='created_at', lookup_expr='lte')
+
+    search = django_filters.CharFilter(method='filter_by_search')
+
+    class Meta:
+        model = ActivityLog
+        fields = ['module', 'action', 'user', 'from_date', 'to_date', 'search']
+
+    def filter_by_search(self, queryset, name, value):
+        query = value.strip()
+        if not query:
+            return queryset
+
+        return queryset.filter(
+            Q(description__icontains=query) |
+            Q(user__username__icontains=query) |
+            Q(user__email__icontains=query)
+        )
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -223,7 +240,7 @@ def activity_feed_view(request):
     """
     try:
         # Strictly filter logs belonging ONLY to request.user
-        logs = ActivityLog.objects.filter(user=request.user)
+        # logs = ActivityLog.objects.filter(user=request.user)
 
         # Optional filter by module (e.g. ?module=DEAL)
         # module_param = request.query_params.get('module')
@@ -233,7 +250,13 @@ def activity_feed_view(request):
         # # Return latest 50 records
         # logs = logs[:50]
 
+        # Order timeline from newest to oldest
+        queryset = ActivityLog.objects.all().order_by('-created_at')
+
+        # Apply django-filter
+        logs = ActivityLogFilter(request.GET, queryset=queryset).qs
         serializer = ActivityLogSerializer(logs, many=True)
         return Response({'status': 1,'message': 'Your activity logs retrieved successfully.','data': serializer.data},status=status.HTTP_200_OK)
     except Exception:
+        traceback.print_exc()
         return Response({'status': 0, 'message': 'An internal server error occurred.'},status=status.HTTP_500_INTERNAL_SERVER_ERROR)

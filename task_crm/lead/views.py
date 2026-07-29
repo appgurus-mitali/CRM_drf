@@ -1,8 +1,7 @@
-from .models import Lead,LeadStatus,LeadSource,Priority
+from .models import Lead,LeadStatus
 from .serializers import LeadSerializer
-from authentication.models import MyUser,ActivityModule,ActivityAction,ActivityLog
+from authentication.models import MyUser,ActivityModule,ActivityAction
 from customer.models import Company,Contact
-from sales.models import Deal,DealStage,FollowUp
 from sales.serializers import DealSerializer
 
 from authentication.activities import log_activity
@@ -12,13 +11,42 @@ from rest_framework.permissions import IsAdminUser,IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
-from rest_framework_simplejwt.tokens import RefreshToken
 import traceback
 
 from django.db import transaction
+from django.db.models import Q
+
+import django_filters
 
 # Create your views here.
-@api_view(['GET','PUT','PATCH','DELETE'])
+class LeadFilter(django_filters.FilterSet):
+    status = django_filters.CharFilter(field_name='status', lookup_expr='iexact')
+    priority = django_filters.CharFilter(field_name='priority', lookup_expr='iexact')
+    source = django_filters.CharFilter(field_name='source', lookup_expr='iexact')
+    assigned_lead = django_filters.NumberFilter(field_name='assigned_lead__id')
+
+    # Custom multi-field search parameter: ?search=john
+    search = django_filters.CharFilter(method='filter_by_search')
+
+    class Meta:
+        model = Lead
+        fields = ['status', 'priority', 'source', 'assigned_lead', 'search']
+
+    def filter_by_search(self, queryset, name, value):
+        query = value.strip()
+        if not query:
+            return queryset
+
+        return queryset.filter(
+            Q(first_name__icontains=query) |
+            Q(last_name__icontains=query) |
+            Q(email__icontains=query) |
+            Q(phone__icontains=query) |
+            Q(company_name__icontains=query)
+        )
+
+
+@api_view(['GET','POST','PUT','PATCH','DELETE'])
 @permission_classes([IsAuthenticated])
 def lead_view(request,pk=None):
     if request.method=='GET':
@@ -27,8 +55,12 @@ def lead_view(request,pk=None):
                 user = Lead.objects.get(id=pk)
                 serializer = LeadSerializer(user)
             else : 
-                users = Lead.objects.all()
-                serializer = LeadSerializer(users,many=True)
+                # users = Lead.objects.all()
+                # serializer = LeadSerializer(users,many=True)
+
+                queryset = LeadFilter(request.GET, queryset=Lead.objects.all()).qs
+                serializer = LeadSerializer(queryset, many=True)
+
             return Response({'status':1,'message':f'Welcome {request.user.username}','data':serializer.data},status=status.HTTP_200_OK)
         except (Lead.DoesNotExist,Lead.MultipleObjectsReturned):
                     return Response({'status':0,'message':f'User not exists.','data':{}},status=status.HTTP_404_NOT_FOUND)
@@ -36,6 +68,20 @@ def lead_view(request,pk=None):
             print("\n\nException in reg")
             traceback.print_exc()
         return Response({'status':0,'message':'An Internal Server Error Occurred. Pls check terminal.'},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    if request.method=='POST':
+        try:
+            serializer = LeadSerializer(data=request.data)
+            if serializer.is_valid():
+                lead = serializer.save()
+                log_activity(user=None,module=ActivityModule.LEAD,action=ActivityAction.CREATE,object_id=lead.id,description=f"Created new lead '{lead.first_name} {lead.last_name}'.")
+                return Response({'status':1,'message':f'Lead Created Successfully','data':serializer.data},status=status.HTTP_201_CREATED)
+            errors={key:err[0] for key,err in serializer.errors.items()}
+            return Response({'status':0,'message':'Validation failed.','error':errors},status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            print("\n\nException in reg")
+            traceback.print_exc()
+            return Response({'status':0,'message':'An Internal Server Error Occurred. Pls check terminal.'},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     try:
         lead = Lead.objects.get(pk=pk)
@@ -66,20 +112,20 @@ def lead_view(request,pk=None):
             traceback.print_exc()
             return Response({'status':0,'message':'An Internal Server Error Occurred. Pls check terminal.'},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-@api_view(['POST'])
-def create_leadview(request):
-    try:
-        serializer = LeadSerializer(data=request.data)
-        if serializer.is_valid():
-            lead = serializer.save()
-            log_activity(user=None,module=ActivityModule.LEAD,action=ActivityAction.CREATE,object_id=lead.id,description=f"Created new lead '{lead.first_name} {lead.last_name}'.")
-            return Response({'status':1,'message':f'Lead Created Successfully','data':serializer.data},status=status.HTTP_201_CREATED)
-        errors={key:err[0] for key,err in serializer.errors.items()}
-        return Response({'status':0,'message':'Validation failed.','error':errors},status=status.HTTP_400_BAD_REQUEST)
-    except Exception as e:
-        print("\n\nException in reg")
-        traceback.print_exc()
-        return Response({'status':0,'message':'An Internal Server Error Occurred. Pls check terminal.'},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+# @api_view(['POST'])
+# def create_leadview(request):
+#     try:
+#         serializer = LeadSerializer(data=request.data)
+#         if serializer.is_valid():
+#             lead = serializer.save()
+#             log_activity(user=None,module=ActivityModule.LEAD,action=ActivityAction.CREATE,object_id=lead.id,description=f"Created new lead '{lead.first_name} {lead.last_name}'.")
+#             return Response({'status':1,'message':f'Lead Created Successfully','data':serializer.data},status=status.HTTP_201_CREATED)
+#         errors={key:err[0] for key,err in serializer.errors.items()}
+#         return Response({'status':0,'message':'Validation failed.','error':errors},status=status.HTTP_400_BAD_REQUEST)
+#     except Exception as e:
+#         print("\n\nException in reg")
+#         traceback.print_exc()
+#         return Response({'status':0,'message':'An Internal Server Error Occurred. Pls check terminal.'},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['PATCH'])
 @permission_classes([IsAdminUser])
@@ -105,37 +151,7 @@ def lead_assign_view(request,pk):
             print("\n\nException in reg")
             traceback.print_exc()
             return Response({"status": 0,'status':0,'message':'An Internal Server Error Occurred. Pls check terminal.','data':{}},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-@api_view(['PATCH'])
-@permission_classes([IsAuthenticated])
-def lead_status_update_view(request,pk):
-    try:
-        lead = Lead.objects.get(id=pk)
-        if lead.assigned_lead!=request.user:
-            return Response({"status": 0,"message":'Unauthorized Update. You cannot update this lead.', 'data':{}},status=status.HTTP_403_FORBIDDEN)
-        
-        new_status = request.data.get('status')
 
-        if not new_status :
-            return Response(
-                {"status": 0,"message":'Invalid data.', 'error':{'status':"Status is required."}}, status=status.HTTP_400_BAD_REQUEST)
-        elif new_status not in LeadStatus.values:
-            return Response(
-                {"status": 0,"message": f"Invalid data.",'error':{'status':f"Invalid status. Allowed choices: {LeadStatus.values}"}}, status=status.HTTP_400_BAD_REQUEST)
-
-        old_status  = lead.status
-        lead.status = new_status
-        log_activity(user=request.user,module=ActivityModule.LEAD,action=ActivityAction.UPDATE,object_id=lead.id,
-                    description=f"Updated status for lead '{lead.first_name} {lead.last_name}' from '{old_status}' to '{new_status}'.",
-                    changes={'status': {'from': old_status, 'to': new_status}})
-        lead.save()
-        return Response({"status": 1,"message": f"Lead status updated to '{new_status}'.",'data':{}}, status=status.HTTP_200_OK)
-    except Lead.DoesNotExist:
-        return Response({"status": 0,"message": f"Lead with ID {pk} does not exist.","data": {}},status=status.HTTP_404_NOT_FOUND)
-    except Exception as e:
-        print("\n\nException in reg")
-        traceback.print_exc()
-        return Response({'status':0,'message':'An Internal Server Error Occurred. Pls check terminal.',"data": {}},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
@@ -144,7 +160,9 @@ def lead_convert_view(request,pk):
         lead = Lead.objects.get(id=pk)
         if lead.assigned_lead!=request.user:
             return Response({"status": 0,"message":'Unauthorized Update. You cannot update this lead.', 'data':{}},status=status.HTTP_403_FORBIDDEN)
-        
+
+        if lead.is_converted:
+            return Response({"status": 0,"message":'Already converted.', 'data':{}},status=status.HTTP_403_FORBIDDEN)
         with transaction.atomic():
             company_instance = None
 
@@ -159,6 +177,7 @@ def lead_convert_view(request,pk):
                 #         name=company_name_clean,
                 #         assigned_to=lead.assigned_lead
                 #     )
+
                 log_activity(user=request.user,module=ActivityModule.COMPANY,action=ActivityAction.CREATE,object_id=company_instance.id,
                                         description=f"Auto-created Company {company_instance.name} from lead conversion' ")
 
@@ -198,10 +217,8 @@ def lead_convert_view(request,pk):
             }
             message = f"Lead '{lead.first_name} {lead.last_name}' converted successfully!"
 
-            deal_instance = None
-            # if getattr(lead, 'estimated_value', None) or getattr(lead, 'title', None):
-            title = request.data.get("title",None)
-            if title is not None:
+            is_deal = request.data.get("deal",None)
+            if is_deal is not None:
                 deal_data = request.data
                 deal_data['contact'] = contact.id
                 serializer = DealSerializer(data=request.data)

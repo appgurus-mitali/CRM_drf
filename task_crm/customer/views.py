@@ -10,13 +10,76 @@ from authentication.activities import log_activity
 from authentication.models import ActivityAction,ActivityModule
 import traceback
 
+import django_filters
+from django.db.models import Q
+
 # Create your views here.
+class CompanyFilter(django_filters.FilterSet):
+    industry = django_filters.CharFilter(field_name='industry', lookup_expr='iexact')
+    state = django_filters.CharFilter(field_name='state', lookup_expr='iexact')
+    city = django_filters.CharFilter(field_name='city', lookup_expr='iexact')
+    
+    assigned_to = django_filters.NumberFilter(field_name='assigned_to__id')
+
+    min_revenue = django_filters.NumberFilter(field_name='annual_revenue', lookup_expr='gte')
+    max_revenue = django_filters.NumberFilter(field_name='annual_revenue', lookup_expr='lte')
+
+    # Multi-field Search Parameter: ?search=tech
+    search = django_filters.CharFilter(method='filter_by_search')
+
+    class Meta:
+        model = Company
+        fields = ['industry', 'state', 'city', 'assigned_to', 'min_revenue', 'max_revenue', 'search']
+
+    def filter_by_search(self, queryset, name, value):
+        query = value.strip()
+        if not query:
+            return queryset
+
+        return queryset.filter(
+            Q(name__icontains=query) |
+            Q(city__icontains=query) |
+            Q(state__icontains=query) |
+            Q(industry__icontains=query) |
+            Q(email__icontains=query)
+        )
+
+
+class ContactFilter(django_filters.FilterSet):
+    company = django_filters.NumberFilter(field_name='company__id')
+    assigned_to = django_filters.NumberFilter(field_name='assigned_to__id')
+    department = django_filters.CharFilter(field_name='department', lookup_expr='iexact')
+    job_title = django_filters.CharFilter(field_name='designation', lookup_expr='iexact')  # or field_name='job_title' depending on your model name
+
+    search = django_filters.CharFilter(method='filter_by_search')
+
+    class Meta:
+        model = Contact
+        fields = ['company', 'assigned_to', 'department', 'job_title', 'search']
+
+    def filter_by_search(self, queryset, name, value):
+        query = value.strip()
+        if not query:
+            return queryset
+
+        return queryset.filter(
+            Q(first_name__icontains=query) |
+            Q(last_name__icontains=query) |
+            Q(email__icontains=query) |
+            Q(phone__icontains=query) |
+            Q(department__icontains=query) |
+            Q(job_title__icontains=query) |
+            Q(company__name__icontains=query)
+        )
+
+    
 @api_view(['GET','POST'])
 @permission_classes([IsAuthenticated])
 def company_list_create_view(request):
     if request.method=='GET':
         try:
-            companies = Company.objects.all()
+            # companies = Company.objects.all()
+            companies  = CompanyFilter(request.GET, queryset=Company.objects.all()).qs
             serializer = CompanySerializer(companies,many=True)
             return Response({'status':1,'message':"Here's Your Copmpany list.",'data':serializer.data},status=status.HTTP_200_OK)
         except Exception as e:
@@ -82,7 +145,7 @@ def contact_list_create_view(request,company_id=None):
     if request.method == 'GET':
         try:
             # search_query = request.query_params.get('search', '').strip()
-            contacts = Contact.objects.all()
+            # contacts = Contact.objects.all()
 
             # if search_query:
             #     contacts = contacts.filter(
@@ -91,7 +154,7 @@ def contact_list_create_view(request,company_id=None):
             #         Q(email__icontains=search_query) |
             #         Q(company__name__icontains=search_query)
             # )
-
+            contacts = ContactFilter(request.GET, queryset=Contact.objects.all()).qs
             serializer = ContactSerializer(contacts, many=True)
             return Response({'status': 1, 'message': 'Contacts retrieved successfully.', 'data': serializer.data},status=status.HTTP_200_OK)
         except Exception:

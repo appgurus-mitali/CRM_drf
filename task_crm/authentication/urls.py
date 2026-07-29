@@ -8,4 +8,5 @@ urlpatterns = [
     path("profile/",views.profile,name='profile'),
     path('logout/', views.logout_view, name='logout'),
     path('token-refresh/',TokenRefreshView.as_view(),name = 'refresh-token'),
+    path('activity/',views.activity_feed_view,name = 'activity'),
 ]

@@ -70,7 +70,6 @@ class FollowUp(models.Model):
     def __str__(self):
         return f"{self.get_followup_type_display()}: {self.title} @ {self.scheduled_at.strftime('%Y-%m-%d %H:%M')}"
 
-
 class EntityType(models.TextChoices):
     LEAD = 'LEAD', 'Lead'
     CONTACT = 'CONTACT', 'Contact'

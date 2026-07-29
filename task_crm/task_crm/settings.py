@@ -46,6 +46,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
+
+    'django_filters',
 ]
 
 MIDDLEWARE = [
@@ -131,18 +133,24 @@ STATIC_URL = 'static/'
 
 AUTH_USER_MODEL = 'authentication.MyUser'#User model
 
-REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ),
-    # "DEFAULT_METADATA_CLASS":"rest_framework.metadata.SimpleMetadata",
-}
-
 from datetime import timedelta
 SIMPLE_JWT = {
     'UPDATE_LAST_LOGIN': True,
     'ACCESS_TOKEN_LIFETIME':timedelta(hours=4),
     'REFRESH_TOKEN_LIFETIME':timedelta(days=0.5),
-    'ROTATE_REFRESH_TOKENS':False, #it resets refresh token also if True
-    # 'BLACKLIST_AFTER_ROTATION':True,
+    'ROTATE_REFRESH_TOKENS':False, 
+}
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'authentication.authentication.BlacklistJWTAuthentication', # Path to your custom class
+    ),
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 10,
+
+    'DEFAULT_FILTER_BACKENDS': (
+        'django_filters.rest_framework.DjangoFilterBackend',
+        'rest_framework.filters.SearchFilter',
+        'rest_framework.filters.OrderingFilter',
+    ),
 }

@@ -17,7 +17,7 @@ class DealSerializer(serializers.ModelSerializer):
             'contact', 'assigned_to', #'assigned_to_name', 
             'description', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id','company','assigned_to','created-at','updated_at','company']
+        read_only_fields = ['id','company','assigned_to','created_at','updated_at','company']
 
         extra_kwargs = {
             'title':{
@@ -122,6 +122,24 @@ class FollowUpSerializer(serializers.ModelSerializer):
                     'incorrect_type': 'Please enter a valid lead id.',
                 }
             },
+            'contact':{
+                'error_messages': {
+                    'does_not_exist': 'Please enter a valid contact.',
+                    'incorrect_type': 'Please enter a valid contact id.',
+                }
+            },
+            'company':{
+                'error_messages': {
+                    'does_not_exist': 'Please enter a valid company.',
+                    'incorrect_type': 'Please enter a valid company id.',
+                }
+            },
+            'deal':{
+                'error_messages': {
+                    'does_not_exist': 'Please enter a valid deal.',
+                    'incorrect_type': 'Please enter a valid deal id.',
+                }
+            },
         }
     def validate(self, attrs):
         lead = attrs.get('lead', getattr(self.instance, 'lead', None))
@@ -136,16 +154,16 @@ class FollowUpSerializer(serializers.ModelSerializer):
         
 
 class NoteSerializer(serializers.ModelSerializer):
-    created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True)
+    # created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True)
 
     class Meta:
         model = Note
-        fields = ['id', 'entity_type', 'object_id', 'content', 'created_by', 'created_at', 'updated_at']
-        read_only_fields = ['id','created_at','updated_at']
+        fields = ['id', 'entity_type', 'object_id', 'content', 'created_by', 'created_at']
+        read_only_fields = ['id','created_at','created_by']
         extra_kwargs = {
             'entity_type':{
                 'error_messages': {
-                    'invalid_choice': f'Invalid Type. Please choose a valid choice.Allowed choices: {FollowUpType.values}',
+                    'invalid_choice': f'Invalid Type. Please choose a valid choice.Allowed choices: {EntityType.values}',
                 }
             },
             'content':{
@@ -179,7 +197,6 @@ class NoteSerializer(serializers.ModelSerializer):
         target_model = model_mapping.get(entity_type)
         
         if target_model:
-            # Check if target record exists in the database
             if not target_model.objects.filter(id=object_id).exists():
                 raise serializers.ValidationError({
                     'object_id': f"{entity_type.capitalize()} with ID {object_id} does not exist."

@@ -5,8 +5,8 @@ from django.db.models import Q
 class LeadSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lead
-        fields = ['id','first_name','last_name','email','phone','company_name','description','status','source','priority','assigned_lead','created_at','updated_at','status']
-        read_only_fields = ['id','created_at','assigned_lead']
+        fields = ['id','first_name','last_name','email','phone','company_name','description','status','source','priority','assigned_lead','created_at','updated_at','status','is_converted']
+        read_only_fields = ['id','created_at','is_converted','assigned_lead']
         extra_kwargs = {
             'first_name':{
                 'required':True,
