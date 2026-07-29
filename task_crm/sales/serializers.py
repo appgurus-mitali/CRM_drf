@@ -1,5 +1,7 @@
 from rest_framework import serializers
-from .models import Deal, FollowUp, DealStage, FollowUpStatus,FollowUpType
+from .models import Deal, FollowUp, DealStage, FollowUpStatus,FollowUpType,Note,EntityType
+from customer.models import Company,Contact
+from lead.models import Lead
 
 
 class DealSerializer(serializers.ModelSerializer):
@@ -121,6 +123,66 @@ class FollowUpSerializer(serializers.ModelSerializer):
                 }
             },
         }
+    def validate(self, attrs):
+        lead = attrs.get('lead', getattr(self.instance, 'lead', None))
+        contact = attrs.get('contact', getattr(self.instance, 'contact', None))
+        company = attrs.get('company', getattr(self.instance, 'company', None))
+        deal = attrs.get('deal', getattr(self.instance, 'deal', None))
+
+        if not any([lead, contact, company, deal]):
+            raise serializers.ValidationError("A follow-up must be associated with at least one entity (Lead, Contact, Company, or Deal).")
+            
+        return attrs
         
 
-    
+class NoteSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True)
+
+    class Meta:
+        model = Note
+        fields = ['id', 'entity_type', 'object_id', 'content', 'created_by', 'created_at', 'updated_at']
+        read_only_fields = ['id','created_at','updated_at']
+        extra_kwargs = {
+            'entity_type':{
+                'error_messages': {
+                    'invalid_choice': f'Invalid Type. Please choose a valid choice.Allowed choices: {FollowUpType.values}',
+                }
+            },
+            'content':{
+                'required':True,
+                'allow_null':False,
+                'allow_blank':False,
+                'error_messages': {
+                    'blank': 'Please fill out your content',
+                    'null': 'content field must not be null.',
+                    'required':"content is required."
+                }
+            },
+        }
+
+    def validate(self, attrs):
+        # Determine entity_type and object_id (support both POST create and PATCH update)
+        entity_type = attrs.get('entity_type', getattr(self.instance, 'entity_type', None))
+        object_id = attrs.get('object_id', getattr(self.instance, 'object_id', None))
+
+        if not entity_type or not object_id:
+            raise serializers.ValidationError("Both 'entity_type' and 'object_id' are required.")
+
+        # Entity existence check mapping
+        model_mapping = {
+            EntityType.LEAD: Lead,
+            EntityType.CONTACT: Contact,
+            EntityType.COMPANY: Company,
+            EntityType.DEAL: Deal,
+        }
+
+        target_model = model_mapping.get(entity_type)
+        
+        if target_model:
+            # Check if target record exists in the database
+            if not target_model.objects.filter(id=object_id).exists():
+                raise serializers.ValidationError({
+                    'object_id': f"{entity_type.capitalize()} with ID {object_id} does not exist."
+                })
+
+        return attrs
