@@ -69,3 +69,18 @@ class FollowUp(models.Model):
 
     def __str__(self):
         return f"{self.get_followup_type_display()}: {self.title} @ {self.scheduled_at.strftime('%Y-%m-%d %H:%M')}"
+
+
+class EntityType(models.TextChoices):
+    LEAD = 'LEAD', 'Lead'
+    CONTACT = 'CONTACT', 'Contact'
+    COMPANY = 'COMPANY', 'Company'
+    DEAL = 'DEAL', 'Deal'
+
+class Note(models.Model):
+    entity_type = models.CharField(max_length=20, choices=EntityType.choices)
+    object_id = models.PositiveIntegerField()
+    
+    content = models.TextField()
+    created_by = models.ForeignKey(MyUser, on_delete=models.CASCADE, related_name='notes')
+    created_at = models.DateTimeField(auto_now_add=True)
