@@ -49,3 +49,6 @@ class Lead(models.Model):
 
     def __str__(self):
         return f"Lead: {self.first_name} {self.last_name} ({self.status})"
+    
+    class Meta:
+        ordering = ['-created_at']

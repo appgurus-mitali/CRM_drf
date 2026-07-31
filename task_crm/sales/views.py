@@ -361,7 +361,7 @@ def dashboard_summary_view(request):
     conversion_rate = round((converted_leads / total_leads * 100), 2) if total_leads > 0 else 0.0
 
     deal_metrics = Deal.objects.aggregate(
-          total_value=Sum('value'),
+        total_value=Sum('value'),
         won_value=Sum('value', filter=Q(stage=DealStage.CLOSED_WON)),
         lost_value=Sum('value', filter=Q(stage=DealStage.CLOSED_LOST)),
         total_deals=Count('id'),

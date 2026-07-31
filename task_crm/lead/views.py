@@ -18,6 +18,8 @@ from django.db.models import Q
 
 import django_filters
 
+from rest_framework.settings import api_settings
+
 # Create your views here.
 class LeadFilter(django_filters.FilterSet):
     status = django_filters.CharFilter(field_name='status', lookup_expr='iexact')
@@ -25,7 +27,6 @@ class LeadFilter(django_filters.FilterSet):
     source = django_filters.CharFilter(field_name='source', lookup_expr='iexact')
     assigned_lead = django_filters.NumberFilter(field_name='assigned_lead__id')
 
-    # Custom multi-field search parameter: ?search=john
     search = django_filters.CharFilter(method='filter_by_search')
 
     class Meta:
@@ -59,7 +60,9 @@ def lead_view(request,pk=None):
                 # serializer = LeadSerializer(users,many=True)
 
                 queryset = LeadFilter(request.GET, queryset=Lead.objects.all()).qs
-                serializer = LeadSerializer(queryset, many=True)
+                paginator = api_settings.DEFAULT_PAGINATION_CLASS()
+                page = paginator.paginate_queryset(queryset, request)
+                serializer = LeadSerializer(page, many=True)
 
             return Response({'status':1,'message':f'Welcome {request.user.username}','data':serializer.data},status=status.HTTP_200_OK)
         except (Lead.DoesNotExist,Lead.MultipleObjectsReturned):
@@ -132,14 +135,14 @@ def lead_view(request,pk=None):
 def lead_assign_view(request,pk):
     try:
         lead = Lead.objects.get(id=pk)
-        user_id = request.data.get('assigned_lead') or request.data.get('user_id')
+        user_id = request.data.get('user_id')
 
         if user_id is None or user_id=='':
-            return Response({"status": 0,"message": "Invalid data.",'errors':{'user_id':"user_id or assigned_lead is required."}}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"status": 0,"message": "Invalid data.",'errors':{'user_id':"user_id is required."}}, status=status.HTTP_400_BAD_REQUEST)
         if not MyUser.objects.filter(id=user_id).exists():
             return Response({"status": 0,"message": "User does not exist.",'data':{}}, status=status.HTTP_404_NOT_FOUND)
         if lead.assigned_lead is not None:
-                    return Response({"status": 0,"message": f"Already assinged lead to {lead.assigned_lead}",'data':{}}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"status": 0,"message": f"Already assinged lead to {lead.assigned_lead}",'data':{}}, status=status.HTTP_400_BAD_REQUEST)
 
         lead.assigned_lead_id = user_id
         lead.save()
@@ -151,7 +154,6 @@ def lead_assign_view(request,pk):
             print("\n\nException in reg")
             traceback.print_exc()
             return Response({"status": 0,'status':0,'message':'An Internal Server Error Occurred. Pls check terminal.','data':{}},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
