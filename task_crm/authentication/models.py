@@ -35,7 +35,6 @@ class ActivityModule(models.TextChoices):
 
 
 class ActivityLog(models.Model):
-
     user = models.ForeignKey(MyUser,on_delete=models.SET_NULL,related_name="activities",null=True, blank=True)#,null=True
 
     module = models.CharField(max_length=20,choices=ActivityModule.choices)
